@@ -124,6 +124,8 @@ class stereoSonar:
         #scene = "Dam-HoveringDualSonar" # Works now (Has a spot where it dosent work)
         scene = "OpenWater-HoveringDualSonar" # Sonar donsen't work
         #scene = "PierHarbor-HoveringDualSonar" #Works now (Has a spot where it dosen't work)
+        #scene = "SimpleUnderwater-HoveringDualSonar"
+        #scene = "Rooms-DataGen"
         self.holoocean_config = holoocean.packagemanager.get_scenario(scene)
 
 
@@ -744,7 +746,8 @@ class stereoSonar:
 
             # assemble the point cloud for ROS, the order may be different based on your
             # coordinate frame
-            points = np.column_stack((x, z, -y))
+            #points = np.column_stack((x, z, -y))
+            points = np.column_stack((x, y, z))
 
             # package the point cloud
             header = Header()
