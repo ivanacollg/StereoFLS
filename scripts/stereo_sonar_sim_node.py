@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import rospy
-from stereo_sonar.stereoSonarCartisian import stereoSonar
+from stereo_sonar.stereoSonarCartisianSim import stereoSonar
 
 if __name__ == "__main__":
 
     # init the node
-    rospy.init_node("stereo_sonar", log_level=rospy.INFO)
+    rospy.init_node("stereo_sonar_sim", log_level=rospy.INFO)
 
     # call the class constructor for stereo sonar
     node = stereoSonar()
