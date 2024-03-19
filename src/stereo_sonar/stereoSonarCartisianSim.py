@@ -589,8 +589,17 @@ class stereoSonar:
         if self.vis_features:
             horizontalFeatureImage *= 255
             verticalFeatureImage *= 255
-            self.imagePub.publish(ros_numpy.image.numpy_to_image(horizontalFeatureImage,"mono8"))
-            self.imagePub_2.publish(ros_numpy.image.numpy_to_image(verticalFeatureImage,"mono8"))
+            # Visualize FOV
+            #horizFeatureImage = horizontalFeatureImage.copy()
+            #print(horizontalFeatureImage.shape) # 600 x 1106
+            horizFeatureImage = cv2.cvtColor(horizontalFeatureImage,cv2.COLOR_GRAY2RGB)
+            vertFeatureImage = cv2.cvtColor(verticalFeatureImage,cv2.COLOR_GRAY2RGB)
+            cv2.line(horizFeatureImage,(449,0),(553,600),[0,0,255],5)
+            cv2.line(horizFeatureImage,(657,0),(553,600),[0,0,255],5)
+            cv2.line(vertFeatureImage,(449,0),(553,600),[0,0,255],5)
+            cv2.line(vertFeatureImage,(657,0),(553,600),[0,0,255],5)
+            self.imagePub.publish(ros_numpy.image.numpy_to_image(horizFeatureImage,"bgr8"))
+            self.imagePub_2.publish(ros_numpy.image.numpy_to_image(vertFeatureImage,"bgr8"))
 
         # convert the features to meters and degrees
         uh, vh, xh, yh, rh, bh = self.img2Real(horizontalFeatures, "horizontal")
