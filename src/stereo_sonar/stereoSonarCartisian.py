@@ -9,6 +9,7 @@ import cv2
 import cv_bridge
 import numpy as np
 import rospy
+import ros_numpy
 import sensor_msgs.point_cloud2 as pc2
 from message_filters import ApproximateTimeSynchronizer, Subscriber
 from scipy.interpolate import interp1d
@@ -45,10 +46,10 @@ class stereoSonar:
         self.verticalAperture = rospy.get_param(ns + "verticalAperture")
 
         # horizontal sonar info
-        self.maxRange_horizontal = 30.0  # default value, reads in new value from msg
+        self.maxRange_horizontal = 3.0  # default value, reads in new value from msg
 
         # vertical sonar info
-        self.maxRange_vertical = 30.0  # default value, reads in new value from msg
+        self.maxRange_vertical = 3.0  # default value, reads in new value from msg
 
         # CFAR parameters for horizontal sonar
         self.tcHorizontal = rospy.get_param(ns + "tcHorizontal")
@@ -253,7 +254,7 @@ class stereoSonar:
         points = np.c_[np.nonzero(peaks)]
 
         # return a numpy array
-        return np.array(points)
+        return np.array(points), np.array(peaks)
 
     def extractPatches(self, v, u, sonar, img, size, ravel=False):
         """A function to get the patch around all features.
@@ -565,10 +566,10 @@ class stereoSonar:
             )
 
         # get some features using CFAR
-        horizontalFeatures = self.extractFeatures(
+        horizontalFeatures, horizontalFeatureImage = self.extractFeatures(
             imgHorizontal, "horizontal", "SOCA", self.thresholdHorizontal
         )
-        verticalFeatures = self.extractFeatures(
+        verticalFeatures, verticalFeatureImage = self.extractFeatures(
             imgVertical, "vertical", "SOCA", self.thresholdVertical
         )
 
@@ -577,6 +578,23 @@ class stereoSonar:
             imgHorizontal, self.map_x, self.map_y, cv2.INTER_LINEAR
         )
         imgVertical = cv2.remap(imgVertical, self.map_x, self.map_y, cv2.INTER_LINEAR)
+
+        # publish the CFAR image
+        if self.vis_features:
+            horizontalFeatureImage *= 255
+            verticalFeatureImage *= 255
+            # Visualize FOV
+            #horizFeatureImage = horizontalFeatureImage.copy()
+            #print(horizontalFeatureImage.shape) # 379 x 687
+            horizFeatureImage = cv2.cvtColor(horizontalFeatureImage,cv2.COLOR_GRAY2RGB)
+            vertFeatureImage = cv2.cvtColor(verticalFeatureImage,cv2.COLOR_GRAY2RGB)
+            cv2.line(horizFeatureImage,(214,0),(343,379),[0,0,255],5)
+            cv2.line(horizFeatureImage,(473,0),(343,379),[0,0,255],5)
+            cv2.line(vertFeatureImage,(214,0),(343,379),[0,0,255],5)
+            cv2.line(vertFeatureImage,(473,0),(343,379),[0,0,255],5)
+            self.imagePub.publish(ros_numpy.image.numpy_to_image(horizFeatureImage,"bgr8"))
+            self.imagePub_2.publish(ros_numpy.image.numpy_to_image(vertFeatureImage,"bgr8"))
+
 
         # convert the features to meters and degrees
         uh, vh, xh, yh, rh, bh = self.img2Real(horizontalFeatures, "horizontal")

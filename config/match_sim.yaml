@@ -2,8 +2,8 @@
 horizontalFOV: 130.0
 transformation: -0.087
 verticalAperture: 20.0
-horizontalTopic: "/sonar_oculus_node/M750d/ping"
-verticalTopic: "/sonar_oculus_node/M1200d/ping"
+horizontalTopic: "/rexrov/forward_sonar_horiz/raw_sonar"
+verticalTopic: "/rexrov/forward_sonar_vert/raw_sonar"
 
 #define which implmentation we want to match the features
 method: cpp # options are cpp or python
@@ -15,28 +15,16 @@ visFeatures: True
 uncertaintyMax: .97
 patchSize: 6
 
-#define CFAR for the horizontal sonar
-# Real life
+#UUV sim
 tcHorizontal: 20
 gcHorizontal: 10
 pfaHorizontal: .2
-thresholdHorizontal: 50.
+thresholdHorizontal: 145.
 #define CFAR for the vertical sonar
-tcVertical: 20
+tcVertical: 10
 gcVertical: 10
-pfaVertical: .2
-thresholdVertical: 50.
-
-#UUV sim
-#tcHorizontal: 20
-#gcHorizontal: 10
-#pfaHorizontal: .2
-#thresholdHorizontal: 145.
-##define CFAR for the vertical sonar
-#tcVertical: 10
-#gcVertical: 10
-#pfaVertical: .1
-#thresholdVertical: 137.
+pfaVertical: .1
+thresholdVertical: 137.
 
 #Holoocean
 #tcHorizontal: 40

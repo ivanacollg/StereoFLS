@@ -47,10 +47,10 @@ class stereoSonar:
         self.verticalAperture = rospy.get_param(ns + "verticalAperture")
 
         # horizontal sonar info
-        self.maxRange_horizontal = 30.0  # default value, reads in new value from msg
+        self.maxRange_horizontal = 5.0  # default value, reads in new value from msg
 
         # vertical sonar info
-        self.maxRange_vertical = 30.0  # default value, reads in new value from msg
+        self.maxRange_vertical = 5.0  # default value, reads in new value from msg
 
         # CFAR parameters for horizontal sonar
         self.tcHorizontal = rospy.get_param(ns + "tcHorizontal")
@@ -200,14 +200,14 @@ class stereoSonar:
         if sonar == "vertical":
             x = points[:,1] - (1106. / 2.) - self.transformation
             y = 600 - points[:,0]
-            x = (x / 600.) * 30
-            y = (y / 600.) * 30
+            x = (x / 600.) * self.maxRange_horizontal
+            y = (y / 600.) * self.maxRange_vertical
 
         else:
             x = points[:,1] - (1106. / 2.)
             y = 600 - points[:,0]
-            x = (x / 600.) * 30
-            y = (y / 600.) * 30
+            x = (x / 600.) * self.maxRange_horizontal
+            y = (y / 600.) * self.maxRange_vertical
 
         #get range and bearing
         r = np.sqrt(x**2 + y**2)
