@@ -88,7 +88,7 @@ class stereoSonar:
         self.timeSync.registerCallback(self.callback)
 
         # define fused point cloud publisher
-        self.cloudPublisher = rospy.Publisher("SonarCloud", PointCloud2, queue_size=10)
+        self.cloudPublisher = rospy.Publisher("SonarCloud", PointCloud2, queue_size=1)
 
         # define cvbridge instance
         self.CVbridge = cv_bridge.CvBridge()
@@ -119,6 +119,8 @@ class stereoSonar:
         self.currentHoriz = np.zeros(0)
         self.currentVert = np.zeros(0)
         self.currentStamp = None
+        self.pingmsg = None
+        self.new = False
 
     def generate_map_xy(self, ping):
         # type: (OculusPing) -> None
@@ -573,9 +575,6 @@ class stereoSonar:
         msgHorizontal -- horizontal sonar msg
         """
 
-        # generate the mapping from polar to cartisian
-        self.generate_map_xy(msgHorizontal)
-
         # decode the compressed horizontal image
         imgHorizontal = np.fromstring(msgHorizontal.ping.data, np.uint8)
         imgHorizontal = np.array(cv2.imdecode(imgHorizontal, cv2.IMREAD_COLOR)).astype(
@@ -590,15 +589,22 @@ class stereoSonar:
         )
         imgVertical = cv2.cvtColor(imgVertical, cv2.COLOR_BGR2GRAY)
 
+        self.pingmsg = msgHorizontal
         self.currentHoriz = imgHorizontal
         self.currentVert = imgVertical
         self.currentStamp = msgHorizontal.header.stamp
+        self.new = True
     
     def run_stereo(self):
+        ping = self.pingmsg
         imgHorizontal = self.currentHoriz
         imgVertical = self.currentVert
+        stamp = self.currentStamp
 
-        if imgHorizontal.size > 0 and imgVertical.size >0: 
+        if imgHorizontal.size > 0 and imgVertical.size > 0 and self.new: 
+            self.new = False
+            # generate the mapping from polar to cartisian
+            self.generate_map_xy(ping)
 
             # denoise the horizontal image, consider adding this for the vertical image
             imgHorizontal = cv2.fastNlMeansDenoising(imgHorizontal, None, 10, 7, 21)
@@ -674,8 +680,9 @@ class stereoSonar:
 
                 # perform some matching
                 matches, match_status = self.matchFeatures_2(
-                    rh, bh, patches_horizontal, rv, xv, patches_vertical, uh, vh, uv, vv
+                    rh, bh, patches_horizontal, rv, xv, patches_vertical
                 )
+
 
             # protect for no matches
             if match_status:
@@ -705,13 +712,13 @@ class stereoSonar:
 
                 # assemble the point cloud for ROS, the order may be different based on your
                 # coordinate frame
-                points = np.column_stack((x+0.3, z, -y))
+                points = np.column_stack((x+0.3, z, -y)) ## Offset to robot center
 
                 # package the point cloud
                 header = Header()
                 header.frame_id = "base_link"
                 header.stamp = (
-                    self.currentStamp
+                    stamp
                 )  # use input msg timestamp for better sync downstream
                 laserCloudOut = pc2.create_cloud(header, self.laserFields, points)
 
@@ -734,7 +741,7 @@ class stereoSonar:
                 header = Header()
                 header.frame_id = "base_link"
                 header.stamp = (
-                    self.currentStamp
+                    stamp
                 )  # use input msg timestamp for better sync downstream
                 laserCloudOut = pc2.create_cloud(header, self.laserFields, points)
 
