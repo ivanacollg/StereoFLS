@@ -712,7 +712,10 @@ class stereoSonar:
 
                 # assemble the point cloud for ROS, the order may be different based on your
                 # coordinate frame
-                points = np.column_stack((x+0.3, z, -y)) ## Offset to robot center
+                # With Kalman Filter
+                points = np.column_stack((x+0.3, -y, z)) ## Offset to robot center
+                # Without Kalman Filter
+                #points = np.column_stack((x+0.3, z, -y))
 
                 # package the point cloud
                 header = Header()
