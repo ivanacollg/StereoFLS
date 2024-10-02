@@ -14,12 +14,9 @@ import sensor_msgs.point_cloud2 as pc2
 from message_filters import ApproximateTimeSynchronizer, Subscriber
 from scipy.interpolate import interp1d
 from sensor_msgs.msg import PointCloud2, PointField, Image
-from nav_msgs.msg import Odometry
 from sklearn.utils import shuffle
 from sonar_oculus.msg import OculusPing
 from std_msgs.msg import Header
-from tf.transformations import quaternion_matrix, euler_from_quaternion, euler_matrix
-import open3d as o3d
 
 from stereo_sonar.CFAR import *
 from stereo_sonar.match import matchFeatures as match_features_cpp
@@ -90,12 +87,8 @@ class stereoSonar:
         # register callback
         self.timeSync.registerCallback(self.callback)
 
-        # define point cloud publisher
+        # define fused point cloud publisher
         self.cloudPublisher = rospy.Publisher("SonarCloud", PointCloud2, queue_size=1)
-
-        ################# Adding Odom for aggreated pointcloud
-        self.odom_sub  = rospy.Subscriber(rospy.get_param(ns + "odomTopic"), Odometry, callback=self.odom_callback, queue_size=1)
-        self.aggregatedCloudPublisher = rospy.Publisher("SonarCloud/aggregated", PointCloud2, queue_size=1)
 
         # define cvbridge instance
         self.CVbridge = cv_bridge.CvBridge()
@@ -128,50 +121,6 @@ class stereoSonar:
         self.currentStamp = None
         self.pingmsg = None
         self.new = False
-
-        self.odom = None
-        self.odom_new = None
-        self.aggregatedCloud = np.zeros(0)
-
-    def tf_to_map(self, odom):
-        pose = odom.position
-        orientation = odom.orientation
-        # Get translation
-        t = np.array([pose.x,pose.y,pose.z])# Centered on robot center
-        
-        # Get rotation
-        # Convert quaternion to rotation matrix
-        quaternion = [orientation.x, orientation.y, orientation.z, orientation.w]
-        roll, pitch, yaw = euler_from_quaternion(quaternion)
-        R = euler_matrix(roll, pitch, yaw)[:3, :3]
-        #R = quaternion_matrix(quaternion)[:3, :3]
-        return t, R
-
-
-    def aggregate_points(self, t, R, new_cloud):
-        # Build Homogeneous tranform matrix
-        H = np.row_stack((np.column_stack((R, t.T)), np.array([0, 0, 0, 1])))
-
-        # Change of cloud points to homogeneous
-        x = new_cloud[:, 0]
-        z = new_cloud[:, 2]
-        y = new_cloud[:, 1]
-        xyzw = np.column_stack((x, y, z, np.ones_like(x)))
-       
-        # Transform points to map reference frame
-        xyzw_map = np.matmul(H, xyzw.T).T
-        xyzw_map[:,0] = np.divide(xyzw_map[:, 0], xyzw_map[:, 3])
-        xyzw_map[:,1] = np.divide(xyzw_map[:, 1], xyzw_map[:, 3])
-        xyzw_map[:,2] = np.divide(xyzw_map[:, 2], xyzw_map[:, 3])
-
-
-        if self.aggregatedCloud.size > 0:
-            cloud = np.row_stack((self.aggregatedCloud, xyzw_map[:, 0:3]))
-        else:
-            cloud =xyzw_map[:, 0:3] 
-
-        return cloud
-
 
     def generate_map_xy(self, ping):
         # type: (OculusPing) -> None
@@ -626,9 +575,6 @@ class stereoSonar:
         msgHorizontal -- horizontal sonar msg
         """
 
-        # Save odom corresponding to the sonar information
-        self.odom = self.odom_new
-
         # decode the compressed horizontal image
         imgHorizontal = np.fromstring(msgHorizontal.ping.data, np.uint8)
         imgHorizontal = np.array(cv2.imdecode(imgHorizontal, cv2.IMREAD_COLOR)).astype(
@@ -649,19 +595,13 @@ class stereoSonar:
         self.currentStamp = msgHorizontal.header.stamp
         self.new = True
     
-
-    def odom_callback(self, odom_msg:Odometry)->None:
-        self.odom_new = odom_msg.pose.pose
-    
     def run_stereo(self):
-        odom = self.odom
         ping = self.pingmsg
         imgHorizontal = self.currentHoriz
         imgVertical = self.currentVert
         stamp = self.currentStamp
-        #print(odom)
 
-        if imgHorizontal.size > 0 and imgVertical.size > 0 and self.new and odom is not None: 
+        if imgHorizontal.size > 0 and imgVertical.size > 0 and self.new: 
             self.new = False
             # generate the mapping from polar to cartisian
             self.generate_map_xy(ping)
@@ -794,23 +734,6 @@ class stereoSonar:
                         cv2.circle(horizFeatureImage,(matches[i,6].astype(int),matches[i,5].astype(int)), 3, (0,255,0), -1)
                         cv2.circle(vertFeatureImage,(matches[i,8].astype(int),matches[i,7].astype(int)), 3, (0, 255, 0), -1)      
 
-                t, R = self.tf_to_map(odom)
-                new_cloud = self.aggregate_points(t, R, points)
-                pcd = o3d.geometry.PointCloud()
-                pcd.points = o3d.utility.Vector3dVector(new_cloud)
-                # Downsample the point cloud using a voxel grid filter
-                voxel_size = 0.05  # Adjust the voxel size to control the downsampling level
-                downsampled_pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
-                sampled_cloud = np.asarray(downsampled_pcd.points)
-                self.aggregatedCloud = sampled_cloud#np.row_stack((sampled_cloud, self.xyz_aggregated))
-                #publish aggregated pointcloud
-                header.frame_id = "map"
-                agregatedCloud = pc2.create_cloud(header,self.laserFields,self.aggregatedCloud)
-                self.aggregatedCloudPublisher.publish(agregatedCloud)
-                np.save('stereo_sonar_cloud.npy', self.aggregatedCloud)
-
-
-
             # there are no matches, publish a blank cloud for downstream time sync
             else:
 
@@ -827,12 +750,6 @@ class stereoSonar:
 
                 # publish the cloud
                 self.cloudPublisher.publish(laserCloudOut)
-
-                #publish aggregated pointcloud
-                header.frame_id = "map"
-                agregatedCloud = pc2.create_cloud(header,self.laserFields,self.aggregatedCloud)
-                self.aggregatedCloudPublisher.publish(agregatedCloud)
-                np.save('stereo_sonar_cloud.npy', self.aggregatedCloud)
             
             if self.vis_features:
                 self.imagePub.publish(ros_numpy.image.numpy_to_image(horizFeatureImage,"bgr8"))
